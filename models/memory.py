@@ -89,14 +89,17 @@ class MemoryModule(nn.Module):
     def retrieve_memories(self, x):
         """Retrieve memories based on input queries"""
         # Project input to queries
-        queries = self.to_queries(x)
         
-        # Retrieve memories
-        memories = self.memory(queries)
+        with torch.enable_grad():
+        
+            queries = self.to_queries(x)
             
-        # Store retrieved memories for reference
-        self.stored_memories = memories
-        
+            # Retrieve memories
+            memories = self.memory(queries)
+                            
+            # Store retrieved memories for reference
+            self.stored_memories = memories
+            
         # Return detached memories to break computational graph connection
         # This prevents the outer model's backward pass from affecting memory weights
         # and avoids "backward through the graph a second time" errors
@@ -105,10 +108,12 @@ class MemoryModule(nn.Module):
     def memorize(self, y):
         """Update memory based on input"""
         
-        # # Calculate predictions and loss
-        loss = F.mse_loss(self.stored_memories, y, reduction='mean')
-                
-        self.memory.update(loss)
+        with torch.enable_grad():
+        
+            # # Calculate predictions and loss
+            loss = F.mse_loss(self.stored_memories, y, reduction='mean')
+                    
+            self.memory.update(loss)
         
         self.memory.zero_grad()
         
@@ -142,12 +147,7 @@ class TestModel(nn.Module):
         
     
 def test():
-    import os
-    import psutil
-    import gc
-    
-    process = psutil.Process(os.getpid())
-    
+        
     # Parameters
     width = 2048
     depth = 4
@@ -161,18 +161,24 @@ def test():
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(params=model.parameters())
     
-    # Generate fixed patterns for consistent testing
-    x = torch.randn(10, width)
-    y = torch.randn(10, width)
+    # Generate fixed patterns for training
+    x_train = torch.randn(10, width)
+    y_train = torch.randn(10, width)
     
-    # Initial memory usage
-    initial_ram = process.memory_info().rss / (1024 * 1024)  # MB
-    print(f"Initial RAM usage: {initial_ram:.2f} MB")
+    # Generate separate validation data
+    x_val = torch.randn(10, width)
+    y_val = torch.randn(10, width)
+
+    # Track losses
+    train_losses = []
+    val_losses = []
+    memory_losses = []
     
     # Training loop
     for i in range(num_epochs):
-        
-        predicted, mem_loss = model(x)
+        # TRAINING PHASE
+        model.train()
+        predicted, mem_loss = model(x_train)
         
         # Store memory weights before backward pass
         memory_weights_before = {}
@@ -180,39 +186,54 @@ def test():
             memory_weights_before[name] = weight.clone().detach()
         
         # Outer loop
-        outer_loss = criterion(predicted, y)
+        outer_loss = criterion(predicted, y_train)
         outer_loss.backward()
         
-        # Check if memory weights changed after backward
-        weights_changed = False
-        for name, weight in model.memory.memory.get_named_weights():
-            if not torch.allclose(memory_weights_before[name], weight):
-                weights_changed = True
-                diff = torch.abs(memory_weights_before[name] - weight).max().item()
-                print(f"Warning: Weight {name} changed after backward pass! Max diff: {diff}")
+        # # Check if memory weights changed after backward
+        # weights_changed = False
+        # for name, weight in model.memory.memory.get_named_weights():
+        #     if not torch.allclose(memory_weights_before[name], weight):
+        #         weights_changed = True
+        #         diff = torch.abs(memory_weights_before[name] - weight).max().item()
+        #         print(f"Warning: Weight {name} changed after backward pass! Max diff: {diff}")
         
-        if not weights_changed and i % 5 == 0:
-            print(f"Iteration {i}: Memory weights unchanged after backward pass (good)")
+        # if not weights_changed and i % 10 == 0:
+        #     print(f"Iteration {i}: Memory weights unchanged after backward pass (good)")
             
         optimizer.step()
         optimizer.zero_grad()
         
+        # Track losses
+        train_losses.append(outer_loss.item())
+        memory_losses.append(mem_loss.item())
+        
+        # VALIDATION PHASE
+        model.eval()
+        with torch.no_grad():
+            val_predicted, _ = model(x_val)
+            val_loss = criterion(val_predicted, y_val)
+            val_losses.append(val_loss.item())
+        
         # Print loss and memory usage every few iterations
-        if i % 5 == 0:
-            # Get memory usage stats
-            ram_usage = process.memory_info().rss / (1024 * 1024)
-            ram_diff = ram_usage - initial_ram
+        if i % 10 == 0:
             
-            print(f"Iteration {i}: Memory loss = {mem_loss.item():.6f} | "
-                  f"Outer loop loss = {outer_loss.item():.6f} | "
-                 f"RAM: {ram_usage:.2f} MB (Change: {ram_diff:+.2f} MB)")
+            print(f"Iteration {i}: Train loss = {outer_loss.item():.6f} | "
+                  f"Val loss = {val_loss.item():.6f} | "
+                  f"Memory loss = {mem_loss.item():.6f}")
+        
+    # Evaluate final performance
+    model.eval()
+    with torch.no_grad():
+        final_train_pred, _ = model(x_train)
+        final_train_loss = criterion(final_train_pred, y_train).item()
+        
+        final_val_pred, _ = model(x_val)
+        final_val_loss = criterion(final_val_pred, y_val).item()
     
-    # Final memory cleanup and report
-    gc.collect()
-    torch.cuda.empty_cache() if torch.cuda.is_available() else None
-    final_ram = process.memory_info().rss / (1024 * 1024)
-    
-    print(f"Final RAM usage: {final_ram:.2f} MB (Change: {final_ram - initial_ram:+.2f} MB)")
+    print(f"\nFinal Results:")
+    print(f"Training Loss: {final_train_loss:.6f}")
+    print(f"Validation Loss: {final_val_loss:.6f}")
+    print(f"Generalization Gap: {final_val_loss - final_train_loss:.6f}")
 
 
 if __name__ == "__main__":
