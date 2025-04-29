@@ -82,7 +82,7 @@ class MemoryAugmentedAttention(nn.Module):
         memories = self.memory.retrieve_memories(x)
         
         # Concatenate memories with input for enhanced context
-        memory_enhanced_x = torch.cat([memories, x], dim=1)
+        memory_enhanced_x = torch.cat([memories, x], dim=0)
         
         # Project to Q, K, V
         Q = self.Wq(memory_enhanced_x)
@@ -104,7 +104,7 @@ class MemoryAugmentedAttention(nn.Module):
         
         # Extract only the part corresponding to the original sequence
         seq_len = x.shape[1]
-        output_original = output[:, -seq_len:, :]
+        output_original = output[-seq_len::, :, :]
         
         # Store new memories based on the output
         self.memory.memorize(output_original)
