@@ -1,0 +1,29 @@
+# Data Configuration
+data:
+  file_path: './data/tiny_shakespeare.txt'
+
+# Model Configuration
+model:
+  block_size: 256      # Sequence length
+  d_model: 128         # Embedding dimension
+  num_heads: 8         # Number of attention heads
+  num_layers: 4        # Number of transformer layers
+  d_ff: 512            # Feed-forward layer dimension
+  dropout: 0.1         # Dropout rate
+  memory_depth: 2 
+
+# Training Configuration
+training:
+  seed: 42                # Random seed for reproducibility
+  batch_size: 128         # Training batch size
+  learning_rate: 0.0001   # Learning rate (3e-4)
+  max_epochs: 10          # Maximum number of training epochs
+  eval_interval: 1     # Evaluation interval in steps
+  grad_clip: 1.0          # Gradient clipping threshold
+
+# Generation Configuration
+generation:
+  eval_examples: 1        # Number of examples to generate during evaluation
+  max_new_tokens: 100     # Maximum number of tokens to generate
+  temperature: 0.8        # Sampling temperature
+  top_k: 40               # Top-k sampling parameter
