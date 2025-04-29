@@ -96,9 +96,12 @@ class MemoryModule(nn.Module):
             
         # Store retrieved memories for reference
         self.stored_memories = memories
-            
-        return memories
-            
+        
+        # Return detached memories to break computational graph connection
+        # This prevents the outer model's backward pass from affecting memory weights
+        # and avoids "backward through the graph a second time" errors
+        return memories.detach() 
+    
     def memorize(self, y):
         """Update memory based on input"""
         
@@ -123,8 +126,14 @@ class TestModel(nn.Module):
         
     def forward(self, x):
         
+        seq_len = x.shape[0]
+        
         memories = self.memory.retrieve_memories(x)
-        predicted = self.Wv(x)
+        
+        memory_enhanced_x = torch.cat([memories, x], dim=0)
+        predicted = self.Wv(memory_enhanced_x)
+        
+        predicted = predicted[-seq_len:, :]
         
         # Inner loop
         mem_loss = self.memory.memorize(predicted)
@@ -136,14 +145,13 @@ def test():
     import os
     import psutil
     import gc
-    import copy
     
     process = psutil.Process(os.getpid())
     
     # Parameters
     width = 2048
     depth = 4
-    num_epochs = 50  # Number of training iterations
+    num_epochs = 100  # Number of training iterations
     
     model = TestModel(
         width=width,
