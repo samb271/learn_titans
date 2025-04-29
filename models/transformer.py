@@ -104,7 +104,7 @@ class MemoryAugmentedAttention(nn.Module):
         
         # Extract only the part corresponding to the original sequence
         seq_len = x.shape[1]
-        output_original = output[-seq_len::, :, :]
+        output_original = output[:, -seq_len:, :]
         
         # Store new memories based on the output
         self.memory.memorize(output_original)
