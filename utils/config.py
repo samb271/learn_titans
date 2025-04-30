@@ -18,7 +18,7 @@ def load_config(config_path):
         config = yaml.safe_load(file)
     
     # Validate configuration (basic checks)
-    required_sections = ['data', 'model', 'training', 'generation']
+    required_sections = ['model', 'training', 'generation']
     for section in required_sections:
         if section not in config:
             raise ValueError(f"Missing required configuration section: {section}")
@@ -37,7 +37,6 @@ def validate_config(config):
     """
     # Required parameters for each section
     required_params = {
-        'data': ['file_path'],
         'model': ['block_size', 'd_model', 'num_heads', 'num_layers', 'd_ff', 'dropout'],
         'training': [
             'seed', 'batch_size', 'learning_rate', 'max_epochs', 

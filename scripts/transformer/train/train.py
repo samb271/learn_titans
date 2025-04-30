@@ -8,11 +8,12 @@ import argparse
 import os
 import shutil
 import datetime
+from transformers import AutoTokenizer
 
 from torch.amp import autocast, GradScaler 
 
 from models.transformer import MemoryAugmentedTransformer
-from utils.data import load_data
+from utils.data import get_loaders
 from utils.config import load_config
 
 # Set device
@@ -23,32 +24,6 @@ print(f"Using device: {device}")
 torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(42)
-
-# Hyperparameters
-BATCH_SIZE = 128
-BLOCK_SIZE = 512  # Sequence length
-LEARNING_RATE = 3e-4
-MAX_EPOCHS = 10
-EVAL_INTERVAL = 2000
-EVAL_EXAMPLES = 1
-
-# Model parameters
-VOCAB_SIZE = 65  # Will be set based on the dataset
-D_MODEL = 256
-NUM_HEADS = 8
-NUM_LAYERS = 4
-D_FF = 512
-DROPOUT = 0.1
-
-def get_batches(data, batch_size, block_size):
-    """
-    Generate random batches from the dataset
-    """
-    indices = torch.randint(0, len(data) - block_size, (batch_size,))
-    x = torch.stack([data[i:i+block_size] for i in indices])
-    y = torch.stack([data[i+1:i+block_size+1] for i in indices])
-    x, y = x.to(device), y.to(device)
-    return x, y
 
 
 def train(config_path):
@@ -72,7 +47,6 @@ def train(config_path):
     print(f"Models will be saved to: {model_save_path}")
     
     # Extract configuration values
-    data_config = config['data']
     model_config = config['model']
     training_config = config['training']
     generation_config = config['generation']
@@ -86,26 +60,17 @@ def train(config_path):
     torch.manual_seed(training_config['seed'])
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(training_config['seed'])
+        
+    tokenizer = AutoTokenizer.from_pretrained("gpt2", use_fast=True)
+    vocab_size = tokenizer.vocab_size
     
-    # Load the data
-    train_dataset, val_dataset = load_data(
-        data_config['file_path'], 
-        model_config['block_size']
+    train_loader, val_loader, test_loader = get_loaders(
+        dataset=training_config["dataset"],
+        tokenizer=tokenizer,
+        block_size=model_config['block_size'],
+        batch_size=training_config['batch_size']
     )
-    vocab_size = train_dataset.vocab_size
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=training_config['batch_size'], 
-        shuffle=True
-    )
-    val_loader = DataLoader(
-        val_dataset, 
-        batch_size=training_config['batch_size'], 
-        shuffle=False
-    )
-    
+        
     # Initialize the model
     model = MemoryAugmentedTransformer(
         vocab_size=vocab_size,
@@ -114,7 +79,8 @@ def train(config_path):
         num_layers=model_config['num_layers'],
         d_ff=model_config['d_ff'],
         max_seq_len=model_config['block_size'],
-        memory_depth=model_config.get('memory_depth', 2),  # New parameter
+        memory_depth=model_config['memory_depth'],
+        memory_width=model_config['memory_width'],
         dropout=model_config['dropout']
     ).to(device)
     
@@ -171,7 +137,7 @@ def train(config_path):
                 print(f"\nSamples at step {global_step}:")
                 generate_samples(
                     model, 
-                    train_dataset, 
+                    train_loader.dataset, 
                     generation_config['eval_examples'],
                     model_config['block_size'], 
                     device,
