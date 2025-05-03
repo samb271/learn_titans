@@ -80,8 +80,8 @@ def train(config_path):
         d_ff=model_config['d_ff'],
         max_seq_len=model_config['block_size'],
         memory_depth=model_config['memory_depth'],
-        memory_width=model_config['memory_width'],
-        dropout=model_config['dropout']
+        dropout=model_config['dropout'],
+        device=device
     ).to(device)
     
     print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")

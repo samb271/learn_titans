@@ -154,14 +154,16 @@ class MemoryAugmentedTransformer(nn.Module):
             num_layers, 
             d_ff, 
             max_seq_len, 
-            memory_depth=2, 
-            dropout=0.1
+            memory_depth, 
+            dropout,
+            device
         ):
         super().__init__()
         
         self.token_embedding = nn.Embedding(vocab_size, d_model)
         self.positional_encoding = PositionalEncoding(d_model, max_seq_len)
         self.dropout = nn.Dropout(dropout)
+        self.device = device
         
         self.layers = nn.ModuleList([
             TransformerDecoderLayer(d_model, num_heads, d_ff, memory_depth, dropout)
@@ -182,7 +184,7 @@ class MemoryAugmentedTransformer(nn.Module):
         # Create causal mask for autoregressive property
         seq_len = x.size(1)
         
-        mask = self.generate_causal_mask(seq_len, seq_len)
+        mask = self.generate_causal_mask(seq_len, seq_len).to(self.device)
         
         # Token embeddings
         x = self.token_embedding(x) * math.sqrt(self.token_embedding.embedding_dim)
@@ -199,7 +201,7 @@ class MemoryAugmentedTransformer(nn.Module):
         
         return x
     
-    def generate_causal_mask(m: int, c: int, device=None) -> torch.Tensor:
+    def generate_causal_mask(self, m: int, c: int, device=None) -> torch.Tensor:
         """
         Returns a causal attention mask of shape (1, 1, m+c, m+c) with boolean values.
         
