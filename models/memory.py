@@ -15,9 +15,13 @@ class MemoryBloc(nn.Module):
             # Initialize weights
             weight = torch.randn(width, width)
             nn.init.xavier_uniform_(weight)
-            weight.requires_grad_(True)  # Important for gradient computation
+            weight.requires_grad_(True)
             
-            # Register weight and surprise buffer
+            # Register weight and TODO: surprise buffer.
+            # The weights are registered as buffers since buffers are not automatically
+            # used by the backprop engine but are still moved to the device of the model.
+            # The backprop cycle of the encapsulating transformer model is the outer loop,
+            # we therefore want to keep the memory (inner loop) entierely independent.
             self.register_buffer(f"weight_{i}", weight)
             
     def get_named_weights(self) -> List[Tuple[str, torch.Tensor]]:
@@ -74,7 +78,7 @@ class MemoryModule(nn.Module):
         self.memory = MemoryBloc(depth, dim, lr)
         self.heads = heads
         
-        # Projections for queries, keys, and values
+        # Projections for queries, TODO: keys, and values
         self.to_queries = nn.Linear(dim, dim, bias=False)
         # self.to_keys = nn.Linear(dim, dim, bias=False)
         # self.to_values = nn.Linear(dim, dim, bias=False)
@@ -91,10 +95,11 @@ class MemoryModule(nn.Module):
         
             queries = self.to_queries(x)
             
-            # Retrieve memories
+            # Retrieve memories based on learned memory-specific queries
             memories = self.memory(queries)
                             
-            # Store retrieved memories for reference
+            # Store retrieved memories for update (memorize()) once the context has been
+            # transformed by the outer loop
             self.stored_memories = memories
             
         # Return detached memories to break computational graph connection
@@ -105,16 +110,22 @@ class MemoryModule(nn.Module):
     def memorize(self, y):
         """Update memory based on input"""
         
+        # We enable grad here in the case where the outer loop is used for inference,
+        # in which case no_grad() is most likely called, preventing the memory from calculating gradients
         with torch.enable_grad():
         
-            # # Calculate predictions and loss
+            # Calculate MSE loss between predictions of the memory module and the actual 
+            # output of the outer loop (attention block)
             loss = F.mse_loss(self.stored_memories, y, reduction='mean')
-                    
+            
+            # Proceed to manual update of memory
             self.memory.update(loss)
         
         self.memory.zero_grad()
         
         return loss
+    
+# ~~~ FOR STANDALONE EXECUTION ~~~
     
 class TestModel(nn.Module):
     def __init__(self, width, depth):
@@ -142,13 +153,12 @@ class TestModel(nn.Module):
         
         return predicted, mem_loss
         
-    
 def test():
         
     # Parameters
     width = 2048
     depth = 4
-    num_epochs = 100  # Number of training iterations
+    num_epochs = 100 
     
     model = TestModel(
         width=width,
@@ -158,7 +168,7 @@ def test():
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(params=model.parameters())
     
-    # Generate fixed patterns for training
+    # Generate fixed patterns (essentially just noise) for quick training
     x_train = torch.randn(10, width)
     y_train = torch.randn(10, width)
 
@@ -168,16 +178,10 @@ def test():
     
     # Training loop
     for i in range(num_epochs):
-        # TRAINING PHASE
+        
         model.train()
         predicted, mem_loss = model(x_train)
-        
-        # Store memory weights before backward pass
-        memory_weights_before = {}
-        for name, weight in model.memory.memory.get_named_weights():
-            memory_weights_before[name] = weight.clone().detach()
-        
-        # Outer loop
+
         outer_loss = criterion(predicted, y_train)
         outer_loss.backward()
             
@@ -188,9 +192,8 @@ def test():
         train_losses.append(outer_loss.item())
         memory_losses.append(mem_loss.item())
         
-        # Print loss and memory usage every few iterations
+        # Print loss every few iterations
         if i % 10 == 0:
-            
             print(f"Iteration {i}: Train loss = {outer_loss.item():.6f} | "
                   f"Memory loss = {mem_loss.item():.6f}")
         
