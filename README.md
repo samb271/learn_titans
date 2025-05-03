@@ -51,3 +51,9 @@ python models/memory.py
 ```
 
 You will see how the outer loop (the language model) and inner loop (the test-time memory) losses evolve independently from eachother. Have fun dissecting this code - once you understand what's contained within that single python file, you'll understand Titans as a whole.
+
+## TODO
+- [ ] Keep past surprises
+- [ ] Forget mechanism
+- [ ] Persistent memory
+- [ ] Parallel training of memory
