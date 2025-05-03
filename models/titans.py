@@ -80,9 +80,11 @@ class MemoryAugmentedAttention(nn.Module):
         batch_size = x.size(0)
         
         # Retrieve memories using the input as query
+        # Output memory tokens will be of identical shape to the input
         memories = self.memory.retrieve_memories(x)
         
-        # Concatenate memories with input for enhanced context
+        # Concatenate memory tokens with input tokens for enhanced context
+        # This doubles the context window
         memory_enhanced_x = torch.cat([memories, x], dim=0)
         
         # Project to Q, K, V
@@ -104,10 +106,12 @@ class MemoryAugmentedAttention(nn.Module):
         output = self.linear_out(context)
         
         # Extract only the part corresponding to the original sequence
+        # Otherwise we would be using the predictions as targets in the loss function
         seq_len = x.shape[1]
         output_original = output[:, -seq_len:, :]
         
-        # Store new memories based on the output
+        # Memorize the output tokens (non-memory ones)
+        # This is the update step in Fig. 2
         self.memory.memorize(output_original)
         
         return output_original, attn_weights
@@ -181,9 +185,11 @@ class Titans(nn.Module):
                 nn.init.xavier_uniform_(p)
                 
     def forward(self, x):
-        # Create causal mask for autoregressive property
+        
         seq_len = x.size(1)
         
+        # Create special mask which allows any memory token to attend to all other memory tokens
+        # But regular tokens have regular causal mask
         mask = self.generate_causal_mask(seq_len, seq_len).to(self.device)
         
         # Token embeddings
@@ -252,35 +258,3 @@ class Titans(nn.Module):
             generated = torch.cat([generated, next_token], dim=1)
             
         return generated
-    
-def test():
-        
-    def generate_causal_mask(m: int, c: int, device=None) -> torch.Tensor:
-        """
-        Returns a causal attention mask of shape (1, 1, m+c, m+c) with boolean values.
-        
-        - First m tokens can attend to all m tokens.
-        - Following c tokens can attend to all m tokens and to causal (past) c tokens.
-        """
-        N = m + c
-        mask = torch.zeros((N, N), dtype=torch.bool, device=device)
-
-        # Memory tokens (rows 0 to m-1): full access to memory tokens
-        mask[:m, :m] = True
-
-        # Causal tokens (rows m to N-1): access to memory + causal history
-        mask[m:, :m] = True
-        mask[m:, m:] = torch.tril(torch.ones((c, c), dtype=torch.bool, device=device))
-
-        # Reshape for broadcasting over batch and head dimensions
-        return mask.unsqueeze(0).unsqueeze(0)  # (1, 1, N, N)
-    
-    m, c = 3, 3
-    print(generate_causal_mask(m, c))
-    
-    print(torch.triu(torch.ones((1, 1, 6, 6)), diagonal=1).eq(0))
-
-
-if __name__ == "__main__":
-    
-    test()
