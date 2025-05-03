@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from typing import List, Tuple
 
 class MemoryBloc(nn.Module):
-    def __init__(self, depth, width, lr=0.1):
+    def __init__(self, depth, width, lr=0.01):
         super().__init__()
         self.lr = torch.tensor(lr)
         self.depth = depth
@@ -69,9 +69,9 @@ class MemoryBloc(nn.Module):
         
 
 class MemoryModule(nn.Module):
-    def __init__(self, dim, depth=2, heads=1):
+    def __init__(self, dim, depth=2, heads=1, lr=0.01):
         super().__init__()
-        self.memory = MemoryBloc(depth, dim)
+        self.memory = MemoryBloc(depth, dim, lr)
         self.heads = heads
         
         # Projections for queries, keys, and values
@@ -79,10 +79,7 @@ class MemoryModule(nn.Module):
         # self.to_keys = nn.Linear(dim, dim, bias=False)
         # self.to_values = nn.Linear(dim, dim, bias=False)
         
-        # Adaptive parameter generators
-        self.lr_hyper = 0.01
-        
-        # State for memory updates
+        # TODO: State for memory updates 
         self.last_momentum = None
         self.stored_memories = None
         
@@ -124,7 +121,7 @@ class TestModel(nn.Module):
         super().__init__()
         
         # Create memory module
-        self.memory = MemoryModule(dim=width, depth=depth)
+        self.memory = MemoryModule(dim=width, depth=depth, lr=0.1)
         
         # Create a target transformation
         self.Wv = nn.Linear(width, width)
@@ -164,14 +161,9 @@ def test():
     # Generate fixed patterns for training
     x_train = torch.randn(10, width)
     y_train = torch.randn(10, width)
-    
-    # Generate separate validation data
-    x_val = torch.randn(10, width)
-    y_val = torch.randn(10, width)
 
     # Track losses
     train_losses = []
-    val_losses = []
     memory_losses = []
     
     # Training loop
@@ -188,17 +180,6 @@ def test():
         # Outer loop
         outer_loss = criterion(predicted, y_train)
         outer_loss.backward()
-        
-        # # Check if memory weights changed after backward
-        # weights_changed = False
-        # for name, weight in model.memory.memory.get_named_weights():
-        #     if not torch.allclose(memory_weights_before[name], weight):
-        #         weights_changed = True
-        #         diff = torch.abs(memory_weights_before[name] - weight).max().item()
-        #         print(f"Warning: Weight {name} changed after backward pass! Max diff: {diff}")
-        
-        # if not weights_changed and i % 10 == 0:
-        #     print(f"Iteration {i}: Memory weights unchanged after backward pass (good)")
             
         optimizer.step()
         optimizer.zero_grad()
@@ -207,18 +188,10 @@ def test():
         train_losses.append(outer_loss.item())
         memory_losses.append(mem_loss.item())
         
-        # VALIDATION PHASE
-        model.eval()
-        with torch.no_grad():
-            val_predicted, _ = model(x_val)
-            val_loss = criterion(val_predicted, y_val)
-            val_losses.append(val_loss.item())
-        
         # Print loss and memory usage every few iterations
         if i % 10 == 0:
             
             print(f"Iteration {i}: Train loss = {outer_loss.item():.6f} | "
-                  f"Val loss = {val_loss.item():.6f} | "
                   f"Memory loss = {mem_loss.item():.6f}")
         
     # Evaluate final performance
@@ -226,14 +199,9 @@ def test():
     with torch.no_grad():
         final_train_pred, _ = model(x_train)
         final_train_loss = criterion(final_train_pred, y_train).item()
-        
-        final_val_pred, _ = model(x_val)
-        final_val_loss = criterion(final_val_pred, y_val).item()
-    
+            
     print(f"\nFinal Results:")
     print(f"Training Loss: {final_train_loss:.6f}")
-    print(f"Validation Loss: {final_val_loss:.6f}")
-    print(f"Generalization Gap: {final_val_loss - final_train_loss:.6f}")
 
 
 if __name__ == "__main__":
