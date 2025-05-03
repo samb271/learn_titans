@@ -12,7 +12,7 @@ from transformers import AutoTokenizer
 
 from torch.amp import autocast, GradScaler 
 
-from models.transformer import MemoryAugmentedTransformer
+from models.titans import Titans
 from utils.data import get_loaders
 from utils.config import load_config
 
@@ -68,11 +68,12 @@ def train(config_path):
         dataset=training_config["dataset"],
         tokenizer=tokenizer,
         block_size=model_config['block_size'],
-        batch_size=training_config['batch_size']
+        batch_size=training_config['batch_size'],
+        max_tokens=training_config['max_tokens']
     )
         
     # Initialize the model
-    model = MemoryAugmentedTransformer(
+    model = Titans(
         vocab_size=vocab_size,
         d_model=model_config['d_model'],
         num_heads=model_config['num_heads'],

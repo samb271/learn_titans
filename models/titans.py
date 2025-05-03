@@ -146,7 +146,7 @@ class TransformerDecoderLayer(nn.Module):
         return x
 
 # Complete Transformer Model
-class MemoryAugmentedTransformer(nn.Module):
+class Titans(nn.Module):
     def __init__(self, 
             vocab_size, 
             d_model, 

@@ -17,6 +17,7 @@ training:
   eval_interval: 1300     # Evaluation interval in steps
   grad_clip: 1.0          # Gradient clipping threshold
   dataset: "wikitext-103"
+  max_tokens: 262144      # Cap the number of tokens in an epoch
 
 # Generation Configuration
 generation:
