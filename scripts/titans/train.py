@@ -60,10 +60,12 @@ def train(config_path):
     torch.manual_seed(training_config['seed'])
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(training_config['seed'])
-        
+    
+    # Get tokenizer
     tokenizer = AutoTokenizer.from_pretrained("gpt2", use_fast=True)
     vocab_size = tokenizer.vocab_size
     
+    # Get data loaders
     train_loader, val_loader, test_loader = get_loaders(
         dataset=training_config["dataset"],
         tokenizer=tokenizer,
@@ -101,11 +103,9 @@ def train(config_path):
         total_loss = 0
         start_time = time.time()
         
-        # Add progress bar for each epoch
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}/{training_config['max_epochs']}")
         
         for batch_idx, (x, y) in progress_bar:
-            # Forward pass
             x, y = x.to(device), y.to(device)
             
             with autocast("cuda"):
@@ -118,7 +118,6 @@ def train(config_path):
             
             # Backward pass
             optimizer.zero_grad()
-            
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), training_config['grad_clip'])
