@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from models.memory import MemoryModule        
+from models.memory import MemoryModule
+import numpy as np     
 
 # Positional Encoding
 class PositionalEncoding(nn.Module):
@@ -146,8 +147,16 @@ class TransformerDecoderLayer(nn.Module):
 
 # Complete Transformer Model
 class MemoryAugmentedTransformer(nn.Module):
-    def __init__(self, vocab_size, d_model, num_heads, num_layers, d_ff, 
-                 max_seq_len, memory_depth=2, dropout=0.1):
+    def __init__(self, 
+            vocab_size, 
+            d_model, 
+            num_heads, 
+            num_layers, 
+            d_ff, 
+            max_seq_len, 
+            memory_depth=2, 
+            dropout=0.1
+        ):
         super().__init__()
         
         self.token_embedding = nn.Embedding(vocab_size, d_model)
@@ -169,24 +178,11 @@ class MemoryAugmentedTransformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
                 
-    def forward(self, x, padding_mask=None):
+    def forward(self, x):
         # Create causal mask for autoregressive property
         seq_len = x.size(1)
         
-        # Account for memory augmentation (doubled sequence length)
-        # TODO: This is very expensive to re-define at every forward call -> move to a class attribute (register as buffer)
-        causal_mask_size = seq_len * 2
-        causal_mask = torch.triu(torch.ones((1, 1, causal_mask_size, causal_mask_size), 
-                                            device=x.device), diagonal=1).eq(0)
-        
-        # Combine with padding mask if provided
-        mask = causal_mask
-        if padding_mask is not None:
-            # Extend padding mask to account for memory tokens
-            extended_padding_mask = torch.ones((padding_mask.size(0), 1, 1, causal_mask_size), 
-                                               device=padding_mask.device)
-            extended_padding_mask[:, :, :, -seq_len:] = padding_mask
-            mask = extended_padding_mask & causal_mask
+        mask = self.generate_causal_mask(seq_len, seq_len)
         
         # Token embeddings
         x = self.token_embedding(x) * math.sqrt(self.token_embedding.embedding_dim)
@@ -202,6 +198,26 @@ class MemoryAugmentedTransformer(nn.Module):
         x = self.output_projection(x)
         
         return x
+    
+    def generate_causal_mask(m: int, c: int, device=None) -> torch.Tensor:
+        """
+        Returns a causal attention mask of shape (1, 1, m+c, m+c) with boolean values.
+        
+        - First m tokens can attend to all m tokens.
+        - Following c tokens can attend to all m tokens and to causal (past) c tokens.
+        """
+        N = m + c
+        mask = torch.zeros((N, N), dtype=torch.bool, device=device)
+
+        # Memory tokens (rows 0 to m-1): full access to memory tokens
+        mask[:m, :m] = True
+
+        # Causal tokens (rows m to N-1): access to memory + causal history
+        mask[m:, :m] = True
+        mask[m:, m:] = torch.tril(torch.ones((c, c), dtype=torch.bool, device=device))
+
+        # Reshape for broadcasting over batch and head dimensions
+        return mask.unsqueeze(0).unsqueeze(0)  # (1, 1, N, N)
     
     def generate(self, input_ids, max_new_tokens, temperature=1.0, top_k=None):
         """Generate text autoregressively"""
@@ -234,3 +250,35 @@ class MemoryAugmentedTransformer(nn.Module):
             generated = torch.cat([generated, next_token], dim=1)
             
         return generated
+    
+def test():
+        
+    def generate_causal_mask(m: int, c: int, device=None) -> torch.Tensor:
+        """
+        Returns a causal attention mask of shape (1, 1, m+c, m+c) with boolean values.
+        
+        - First m tokens can attend to all m tokens.
+        - Following c tokens can attend to all m tokens and to causal (past) c tokens.
+        """
+        N = m + c
+        mask = torch.zeros((N, N), dtype=torch.bool, device=device)
+
+        # Memory tokens (rows 0 to m-1): full access to memory tokens
+        mask[:m, :m] = True
+
+        # Causal tokens (rows m to N-1): access to memory + causal history
+        mask[m:, :m] = True
+        mask[m:, m:] = torch.tril(torch.ones((c, c), dtype=torch.bool, device=device))
+
+        # Reshape for broadcasting over batch and head dimensions
+        return mask.unsqueeze(0).unsqueeze(0)  # (1, 1, N, N)
+    
+    m, c = 3, 3
+    print(generate_causal_mask(m, c))
+    
+    print(torch.triu(torch.ones((1, 1, 6, 6)), diagonal=1).eq(0))
+
+
+if __name__ == "__main__":
+    
+    test()
