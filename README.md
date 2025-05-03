@@ -26,9 +26,11 @@ tar -xzvf wikitext-103.tar.gz
 ```
 
 And you should be good to go. Confirm that the following three datasets are within the folder *./data/wikitext-103/*
->wiki.test.tokens
->wiki.train.tokens
->wiki.valid.tokens
+```
+|- wiki.test.tokens
+|- wiki.train.tokens
+|- wiki.valid.tokens
+```
 
 That's it!
 
