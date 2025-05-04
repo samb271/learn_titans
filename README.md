@@ -1,5 +1,5 @@
 # Unofficial implementation of Titans
-Compact and unofficial implementation of *Titans: Learning to Memorize at Test-Time*. Missing a few things, but prioritized readability for those wishing to have code to support the reading of the paper. 
+Compact and unofficial implementation of *Titans: Learning to Memorize at Test-Time*, specifically the **MAC** version. Missing a few things, but prioritized readability for those wishing to have code to support the reading of the paper. 
 ## 1. Getting started
 First, install the packages in a virtual environment. Code has uniquely been tested with Python 3.12.
 #### 1.1 Dependencies
