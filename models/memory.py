@@ -84,15 +84,11 @@ class MemoryModule(nn.Module):
         # self.to_values = nn.Linear(dim, dim, bias=False)
         
         # TODO: State for memory updates 
-        self.last_momentum = None
+        self.momentum = None
         self.stored_memories = None
         
     def retrieve_memories(self, x):
-        """Retrieve memories based on input queries"""
-        # Project input to queries
-        
         with torch.enable_grad():
-        
             queries = self.to_queries(x)
             
             # Retrieve memories based on learned memory-specific queries
