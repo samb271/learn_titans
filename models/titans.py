@@ -5,7 +5,6 @@ import math
 from models.memory import MemoryModule
 import numpy as np     
 
-# Positional Encoding
 class PositionalEncoding(nn.Module):
     def __init__(self, dim_model, max_len=5000):
         super().__init__()
@@ -21,7 +20,6 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return x + self.pe[:, :x.size(1), :]
 
-# Feed Forward Network
 class FeedForward(nn.Module):
     def __init__(self, d_model, d_ff, dropout=0.1):
         super().__init__()
@@ -34,7 +32,6 @@ class FeedForward(nn.Module):
         x = self.dropout(x)
         return self.linear2(x)
 
-# Self-Attention
 class SelfAttention(nn.Module):
     def __init__(self, dropout=0.1):
         super().__init__()
@@ -53,7 +50,6 @@ class SelfAttention(nn.Module):
         
         return output, attention_weights
 
-# Memory-Augmented Multi-Head Attention
 class MemoryAugmentedAttention(nn.Module):
     def __init__(self, dim_model, num_heads, dropout=0.1, memory_depth=2):
         super().__init__()
@@ -116,7 +112,6 @@ class MemoryAugmentedAttention(nn.Module):
         
         return output_original, attn_weights
 
-# Transformer Decoder Layer
 class TransformerDecoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, memory_depth=2, dropout=0.1):
         super().__init__()
@@ -149,7 +144,6 @@ class TransformerDecoderLayer(nn.Module):
         
         return x
 
-# Complete Transformer Model
 class Titans(nn.Module):
     def __init__(self, 
             vocab_size, 
@@ -192,28 +186,20 @@ class Titans(nn.Module):
         # But regular tokens have regular causal mask
         mask = self.generate_causal_mask(seq_len, seq_len).to(self.device)
         
-        # Token embeddings
         x = self.token_embedding(x) * math.sqrt(self.token_embedding.embedding_dim)
         x = self.positional_encoding(x)
         x = self.dropout(x)
         
-        # Apply transformer layers
         for layer in self.layers:
             x = layer(x, mask)
             
-        # Final normalization and projection
         x = self.norm(x)
         x = self.output_projection(x)
         
         return x
     
     def generate_causal_mask(self, m: int, c: int, device=None) -> torch.Tensor:
-        """
-        Returns a causal attention mask of shape (1, 1, m+c, m+c) with boolean values.
         
-        - First m tokens can attend to all m tokens.
-        - Following c tokens can attend to all m tokens and to causal (past) c tokens.
-        """
         N = m + c
         mask = torch.zeros((N, N), dtype=torch.bool, device=device)
 
@@ -224,7 +210,6 @@ class Titans(nn.Module):
         mask[m:, :m] = True
         mask[m:, m:] = torch.tril(torch.ones((c, c), dtype=torch.bool, device=device))
 
-        # Reshape for broadcasting over batch and head dimensions
         return mask.unsqueeze(0).unsqueeze(0)  # (1, 1, N, N)
     
     def generate(self, input_ids, max_new_tokens, temperature=1.0, top_k=None):
